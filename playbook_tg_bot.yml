@@ -1,31 +1,29 @@
-- name: instalation for all hosts
+- name: installation for all hosts
   hosts: all
   gather_facts: false
   tasks:
     - name: install postgresql
-      package: 
-        name: postgresql
+      package:
+        name: "postgresql"
         state: present
-    - name: install psycopg
-      package: 
-        name: postgresql-contrib
+    - name: install postgresql-contrib
+      package:
+        name: "postgresql-contrib"
         state: present
     - name: install libpq-dev
       package:
         name: libpq-dev
         state: present
 
-- name: start_db
+- name: db init
   hosts: host01
   gather_facts: false
   tasks:
-    - name: copy
-      copy:
-        src: "{{ hostvars[inventory_hostname]['dir'] }}/init.sql"
+    - name: create init.sql from template
+      template:
+        src: /root/PT-DevOps-Bot/init.sql
         dest: /tmp/init.sql
         mode: '0644'
-    - name: chown
-      command: chown postgres:postgres /tmp/init.sql
     - name: replacedb
       replace:
         path: /tmp/init.sql
@@ -55,79 +53,81 @@
       service:
         name: postgresql
         state: restarted
-    - name: init.sql
+    - name: execute init.sql
       command: psql -a -f /tmp/init.sql
       become: true
       become_user: postgres
 
-- name: repl config on db
+- name: replication configuration
   hosts: host01
   gather_facts: false
   tasks:
-    - name: add to conf file
+    - name: update postgresql.conf
       blockinfile:
-        path: "/etc/postgresql/{{ hostvars[inventory_hostname]['POSTGRES_VERSION'] }}/main/postgresql.conf"
+        path: "/etc/postgresql/{{ POSTGRES_VERSION }}/main/postgresql.conf"
         block: |
           listen_addresses = '*'
-          wal_level=replica
-          hot_standby=on
-          max_wal_senders=10
-          max_replication_slots=10
-          hot_standby_feedback=on
-          log_replication_commands=on
-    - name: pg_hba conf
+          wal_level = replica
+          hot_standby = on
+          max_wal_senders = 10
+          max_replication_slots = 10
+          hot_standby_feedback = on
+          log_replication_commands = on
+    - name: update pg_hba.conf
       blockinfile:
-        path: "/etc/postgresql/{{ hostvars[inventory_hostname]['POSTGRES_VERSION'] }}/main/pg_hba.conf"
-        block: | 
-          host replication all {{ hostvars[inventory_hostname]['ansible_host'] }}/24 scram-sha-256
-          host all all {{ hostvars[inventory_hostname]['ansible_host'] }}/32 trust
+        path: "/etc/postgresql/{{ POSTGRES_VERSION }}/main/pg_hba.conf"
+        block: |
+          host replication all {{ ansible_host }}/24 scram-sha-256
+          host all all {{ ansible_host }}/32 trust
     - name: restart postgresql
       service:
         name: postgresql
         state: restarted
-      
-- name: start repl configuration
+
+- name: slave configuration and initialization
   hosts: host02
   gather_facts: false
   tasks:
-    - name: rm
-      command: rm -rf /var/lib/postgresql/{{ hostvars[inventory_hostname]['POSTGRES_VERSION'] }}/
-    - name: pg_basebackup
-      command: pg_basebackup -h {{ hostvars[inventory_hostname]['DB_HOST'] }} -D /var/lib/postgresql/{{ hostvars[inventory_hostname]['POSTGRES_VERSION'] }}/main/ -U {{ hostvars[inventory_hostname]['DB_REPL_USER'] }} -vP -w
-      environment: 
-        PGPASSWORD: "{{ hostvars[inventory_hostname]['DB_REPL_PASSWORD'] }}"
-    - name: chown
+    - name: remove old PostgreSQL data directory
+      command: rm -rf /var/lib/postgresql/{{ POSTGRES_VERSION }}/main
+    - name: run pg_basebackup
+      command: pg_basebackup -h {{ DB_HOST }} -D /var/lib/postgresql/{{ POSTGRES_VERSION }}/main/ -U {{ DB_REPL_USER }} -vP -w
+      environment:
+        PGPASSWORD: "{{ DB_REPL_PASSWORD }}"
+    - name: change owner of PostgreSQL data directory
       command: chown -R postgres:postgres /var/lib/postgresql/
     - name: restart postgresql
       service:
         name: postgresql
         state: restarted
 
-- name: python bot
+- name: deploy and run python bot
   hosts: host01
   gather_facts: false
   tasks:
-    - name: mkdir
-      command: mkdir -p "{{ hostvars[inventory_hostname]['dir'] }}/bot"
-    - name: git clone
+    - name: create bot directory
+      command: mkdir -p "{{ dir }}/bot"
+    - name: clone bot repository
       git:
-        repo: https://github.com/roma0896/PT-DevOps-Bot.git
-        dest: "{{ hostvars[inventory_hostname]['dir'] }}/bot"
+        repo: "https://github.com/roma0896/PT-DevOps-Bot.git"
+        dest: "{{ dir }}/bot"
         version: main
-    - name: pip install
-      pip: 
-        requirements: "{{ hostvars[inventory_hostname]['dir'] }}/bot/requirements.txt"
+    - name: install python requirements
+      pip:
+        requirements: "{{ dir }}/bot/requirements.txt"
+    - name: create logs directory
+      command: mkdir -p "{{ dir }}/../logs"
     - name: run python bot
-      command: python3 "{{ hostvars[inventory_hostname]['dir'] }}/bot/bot.py"
+      command: python3 "{{ dir }}/bot/bot.py"
       environment:
-        TOKEN: "{{ hostvars[inventory_hostname]['TOKEN'] }}"
-        HOST: "{{ hostvars[inventory_hostname]['RM_HOST'] }}"
-        PORT: "{{ hostvars[inventory_hostname]['RM_PORT'] }}"
-        USER: "{{ hostvars[inventory_hostname]['RM_USER'] }}"
-        PASSWORD: "{{ hostvars[inventory_hostname]['RM_PASSWORD'] }}"
-        DBHOST: "{{ hostvars[inventory_hostname]['ansible_host'] }}"
-        DBPORT: "{{ hostvars[inventory_hostname]['DB_PORT'] }}"
-        DBUSER: "{{ hostvars[inventory_hostname]['DB_USER'] }}"
-        DBPASSWORD: "{{ hostvars[inventory_hostname]['DB_PASSWORD'] }}"
-        DBNAME: "{{ hostvars[inventory_hostname]['DB_DATABASE'] }}"
-        PG_VERSION: "{{ hostvars[inventory_hostname]['POSTGRES_VERSION'] }}"
+        TOKEN: "{{ TOKEN }}"
+        HOST: "{{ RM_HOST }}"
+        PORT: "{{ RM_PORT }}"
+        USER: "{{ RM_USER }}"
+        PASSWORD: "{{ RM_PASSWORD }}"
+        DBHOST: "{{ ansible_host }}"
+        DBPORT: "{{ DB_PORT }}"
+        DBUSER: "{{ DB_USER }}"
+        DBPASSWORD: "{{ DB_PASSWORD }}"
+        DBNAME: "{{ DB_DATABASE }}"
+        PG_VERSION: "{{ POSTGRES_VERSION }}"
