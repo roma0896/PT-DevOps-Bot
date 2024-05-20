@@ -22,7 +22,10 @@ services:
       - repl_logs:/var/log/
   db:
     container_name: db
-    build: ./db
+    build: 
+      context: ./db
+      args:
+        DB_PORT: ${DB_PORT}
     ports:
       - "${DB_PORT}:${DB_PORT}"
     volumes:

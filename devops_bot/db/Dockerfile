@@ -1,5 +1,7 @@
 FROM postgres:15
 
+ARG DB_PORT
+
 WORKDIR /db
 
 COPY init.sql .
@@ -11,7 +13,7 @@ RUN envsubst < /db/init.sql > /docker-entrypoint-initdb.d/init.sql
 RUN cat <<EOF > /etc/postgresql/postgresql.conf
 hba_file = '/etc/postgresql/pg_hba.conf'
 listen_addresses = '*'
-port = 
+port = $DB_PORT
 archive_mode = on
 archive_command = 'cp %p /oracle/pg_data/archive/%f'
 max_wal_senders = 10
