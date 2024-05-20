@@ -1,0 +1,133 @@
+- name: instalation for all hosts
+  hosts: all
+  gather_facts: false
+  tasks:
+    - name: install postgresql
+      package: 
+        name: postgresql
+        state: present
+    - name: install psycopg
+      package: 
+        name: postgresql-contrib
+        state: present
+    - name: install libpq-dev
+      package:
+        name: libpq-dev
+        state: present
+
+- name: start_db
+  hosts: host01
+  gather_facts: false
+  tasks:
+    - name: copy
+      copy:
+        src: "{{ hostvars[inventory_hostname]['dir'] }}/init.sql"
+        dest: /tmp/init.sql
+        mode: '0644'
+    - name: chown
+      command: chown postgres:postgres /tmp/init.sql
+    - name: replacedb
+      replace:
+        path: /tmp/init.sql
+        regexp: "replacedbname"
+        replace: "{{ hostvars[inventory_hostname]['DB_DATABASE'] }}"
+    - name: replaceuser
+      replace:
+        path: /tmp/init.sql
+        regexp: "replacerepluser"
+        replace: "{{ hostvars[inventory_hostname]['DB_REPL_USER'] }}"
+    - name: replacepassword
+      replace:
+        path: /tmp/init.sql
+        regexp: "replacereplpassword"
+        replace: "{{ hostvars[inventory_hostname]['DB_REPL_PASSWORD'] }}"
+    - name: replacepostgresuser
+      replace:
+        path: /tmp/init.sql
+        regexp: "replacepostgresuser"
+        replace: "{{ hostvars[inventory_hostname]['DB_USER'] }}"
+    - name: replacepostgrespassword
+      replace:
+        path: /tmp/init.sql
+        regexp: "replacepostgrespassword"
+        replace: "{{ hostvars[inventory_hostname]['DB_PASSWORD'] }}"
+    - name: restart postgresql
+      service:
+        name: postgresql
+        state: restarted
+    - name: init.sql
+      command: psql -a -f /tmp/init.sql
+      become: true
+      become_user: postgres
+
+- name: repl config on db
+  hosts: host01
+  gather_facts: false
+  tasks:
+    - name: add to conf file
+      blockinfile:
+        path: "/etc/postgresql/{{ hostvars[inventory_hostname]['POSTGRES_VERSION'] }}/main/postgresql.conf"
+        block: |
+          listen_addresses = '*'
+          wal_level=replica
+          hot_standby=on
+          max_wal_senders=10
+          max_replication_slots=10
+          hot_standby_feedback=on
+          log_replication_commands=on
+    - name: pg_hba conf
+      blockinfile:
+        path: "/etc/postgresql/{{ hostvars[inventory_hostname]['POSTGRES_VERSION'] }}/main/pg_hba.conf"
+        block: | 
+          host replication all {{ hostvars[inventory_hostname]['ansible_host'] }}/24 scram-sha-256
+          host all all {{ hostvars[inventory_hostname]['ansible_host'] }}/32 trust
+    - name: restart postgresql
+      service:
+        name: postgresql
+        state: restarted
+      
+- name: start repl configuration
+  hosts: host02
+  gather_facts: false
+  tasks:
+    - name: rm
+      command: rm -rf /var/lib/postgresql/{{ hostvars[inventory_hostname]['POSTGRES_VERSION'] }}/
+    - name: pg_basebackup
+      command: pg_basebackup -h {{ hostvars[inventory_hostname]['DB_HOST'] }} -D /var/lib/postgresql/{{ hostvars[inventory_hostname]['POSTGRES_VERSION'] }}/main/ -U {{ hostvars[inventory_hostname]['DB_REPL_USER'] }} -vP -w
+      environment: 
+        PGPASSWORD: "{{ hostvars[inventory_hostname]['DB_REPL_PASSWORD'] }}"
+    - name: chown
+      command: chown -R postgres:postgres /var/lib/postgresql/
+    - name: restart postgresql
+      service:
+        name: postgresql
+        state: restarted
+
+- name: python bot
+  hosts: host01
+  gather_facts: false
+  tasks:
+    - name: mkdir
+      command: mkdir -p "{{ hostvars[inventory_hostname]['dir'] }}/bot"
+    - name: git clone
+      git:
+        repo: https://github.com/roma0896/PT-DevOps-Bot.git
+        dest: "{{ hostvars[inventory_hostname]['dir'] }}/bot"
+        version: main
+    - name: pip install
+      pip: 
+        requirements: "{{ hostvars[inventory_hostname]['dir'] }}/bot/requirements.txt"
+    - name: run python bot
+      command: python3 "{{ hostvars[inventory_hostname]['dir'] }}/bot/bot.py"
+      environment:
+        TOKEN: "{{ hostvars[inventory_hostname]['TOKEN'] }}"
+        HOST: "{{ hostvars[inventory_hostname]['RM_HOST'] }}"
+        PORT: "{{ hostvars[inventory_hostname]['RM_PORT'] }}"
+        USER: "{{ hostvars[inventory_hostname]['RM_USER'] }}"
+        PASSWORD: "{{ hostvars[inventory_hostname]['RM_PASSWORD'] }}"
+        DBHOST: "{{ hostvars[inventory_hostname]['ansible_host'] }}"
+        DBPORT: "{{ hostvars[inventory_hostname]['DB_PORT'] }}"
+        DBUSER: "{{ hostvars[inventory_hostname]['DB_USER'] }}"
+        DBPASSWORD: "{{ hostvars[inventory_hostname]['DB_PASSWORD'] }}"
+        DBNAME: "{{ hostvars[inventory_hostname]['DB_DATABASE'] }}"
+        PG_VERSION: "{{ hostvars[inventory_hostname]['POSTGRES_VERSION'] }}"

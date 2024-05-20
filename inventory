@@ -1,0 +1,28 @@
+all:
+  vars:
+    DB_REPL_USER: repl_user
+    DB_REPL_PASSWORD: toor
+    POSTGRES_VERSION: 15
+    DB_HOST: 
+  hosts:
+    host01:
+      ansible_host: 192.168.71.145
+      ansible_user: root
+      ansible_ssh_pass: toor
+      github_repo: https://github.com/roma0896/PT-DevOps-Bot.git
+      dir: /root/ansible
+      TOKEN: 6406882542:AAEnuk70Kha5ARM3-vgqeeONWNDElEBoXng
+      RM_HOST: 192.168.71.145
+      RM_PORT: 22
+      RM_USER: root
+      RM_PASSWORD: toor
+      DB_USER: postgres
+      DB_PASSWORD: toor
+      DB_PORT: 5432
+      DB_DATABASE: db_bot
+      DB_REPL_HOST: db_repl
+      DB_REPL_PORT: 5432
+    host02:
+      ansible_host: 192.168.159.146
+      ansible_user: root
+      ansible_ssh_pass: toor
