@@ -11,7 +11,7 @@ all:
       ansible_ssh_pass: toor
       github_repo: https://github.com/roma0896/PT-DevOps-Bot.git
       dir: /root/ansible
-      TOKEN: 6406882542:AAEnuk70Kha5ARM3-vgqeeONWNDElEBoXng
+      TOKEN: ## В Notion
       RM_HOST: 192.168.71.145
       RM_PORT: 22
       RM_USER: root
