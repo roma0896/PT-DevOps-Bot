@@ -201,7 +201,7 @@ def monitoring(update: Update, context: CallbackContext):
             stdin, stdout, stderr = client.exec_command('systemctl list-units --type=service --state=running')
             output = stdout.read().decode()
         case '/get_repl_logs':
-            execute = 'cat /var/log/postgresql/postgresql-15-main.log | grep -i repl | tail -15'
+            execute = 'cat /var/log/postgresql/postgresql-14-main.log | grep -i repl | tail -15'
             #stdin, stdout, stderr = client.exec_command('cat /var/log/postgresql/postgresql-15-main.log | grep -i repl | tail -15') ## Сбор логов репликации
             sproc = subprocess.Popen(execute, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
             output, error = sproc.communicate()
